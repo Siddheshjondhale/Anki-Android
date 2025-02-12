@@ -20,6 +20,8 @@ import android.os.Parcel
 import android.os.Parcelable
 import androidx.annotation.CheckResult
 import androidx.core.content.edit
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -76,6 +78,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.parcelize.Parcelize
 import net.ankiweb.rsdroid.BackendException
 import org.jetbrains.annotations.VisibleForTesting
 import timber.log.Timber
@@ -249,17 +252,18 @@ class CardBrowserViewModel(
 
     val flowOfInitCompleted = MutableStateFlow(false)
 
-    val flowOfColumnHeadings: StateFlow<List<ColumnHeading>> =
+    val flowOfColumnHeadings: StateFlow<List<ColumnWithSample>> =
         combine(flowOfActiveColumns, flowOfCardsOrNotes, flowOfAllColumns) { activeColumns, cardsOrNotes, allColumns ->
             Timber.d("updated headings for %d columns", activeColumns.count)
-            activeColumns.columns.map {
-                ColumnHeading(
-                    label = allColumns[it.ankiColumnKey]!!.getLabel(cardsOrNotes),
+            activeColumns.columns.map { columnType ->
+                val columnData = allColumns[columnType.ankiColumnKey]!!
+                ColumnWithSample(
+                    label = columnData.getLabel(cardsOrNotes),
+                    columnType = columnType,
+                    sampleValue = null
                 )
             }
-            // stateIn is required for tests
         }.stateIn(viewModelScope, SharingStarted.Eagerly, initialValue = emptyList())
-
     /**
      * Whether the task launched from CardBrowserViewModel.init has completed.
      *
@@ -380,7 +384,7 @@ class CardBrowserViewModel(
     }
 
     /** Handles an update of the visible columns */
-    private suspend fun updateActiveColumns(columns: BrowserColumnCollection) {
+    internal suspend fun updateActiveColumns(columns: BrowserColumnCollection) {
         Timber.d("updating active columns")
         withCol { backend.setActiveBrowserColumns(columns.backendKeys) }
         flowOfActiveColumns.update { columns }
@@ -975,6 +979,44 @@ class CardBrowserViewModel(
         )
     }
 
+    private val _availableColumns = MutableLiveData<List<ColumnWithSample>>()
+    val availableColumns: LiveData<List<ColumnWithSample>> = _availableColumns
+
+    // Retrieves available columns
+    fun fetchAvailableColumns(cardsOrNotes: CardsOrNotes) {
+        viewModelScope.launch {
+            val (_, available) = previewColumnHeadings(cardsOrNotes)
+
+            if (available.isNotEmpty()) {
+                _availableColumns.postValue(available)
+                for (column in available) {
+                    Timber.e("Available column: ${column.label}")
+                }
+            } else {
+                Timber.e(" No available columns found")
+                _availableColumns.postValue(emptyList())
+            }
+        }
+    }
+
+    fun updateSelectedColumn(selectedColumn: ColumnWithSample?, newColumn: ColumnWithSample) {
+        viewModelScope.launch {
+            val previousCollection = flowOfActiveColumns.value.columns.toMutableList()
+            // Find the index of the column using ankiColumnKey
+            val indexToReplace = previousCollection.indexOfFirst {
+                it.ankiColumnKey == selectedColumn?.columnType?.ankiColumnKey
+            }
+            // if found replace it with the new column
+            if (indexToReplace != -1) {
+                previousCollection[indexToReplace] = newColumn.columnType
+            } else {
+                Timber.e("Selected column not found in active columns! (ankiColumnKey=${selectedColumn?.columnType?.ankiColumnKey})")
+            }
+            val newCollection = BrowserColumnCollection(previousCollection) // Keep all columns and replace only one
+            updateActiveColumns(newCollection)
+        }
+    }
+
     companion object {
         fun factory(
             lastDeckIdRepository: LastDeckIdRepository,
@@ -1126,6 +1168,7 @@ sealed class RepositionCardsRequest {
 
 fun BrowserColumns.Column.getLabel(cardsOrNotes: CardsOrNotes): String = if (cardsOrNotes == CARDS) cardsModeLabel else notesModeLabel
 
+@Parcelize
 data class ColumnHeading(
     val label: String,
-)
+) : Parcelable
