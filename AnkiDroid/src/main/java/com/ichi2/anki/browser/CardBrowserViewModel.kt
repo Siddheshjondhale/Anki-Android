@@ -20,8 +20,6 @@ import android.os.Parcel
 import android.os.Parcelable
 import androidx.annotation.CheckResult
 import androidx.core.content.edit
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -67,6 +65,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.combineTransform
 import kotlinx.coroutines.flow.filter
@@ -256,10 +255,11 @@ class CardBrowserViewModel(
                 ColumnWithSample(
                     label = columnData.getLabel(cardsOrNotes),
                     columnType = columnType,
-                    sampleValue = null
+                    sampleValue = null,
                 )
             }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, initialValue = emptyList())
+
     /**
      * Whether the task launched from CardBrowserViewModel.init has completed.
      *
@@ -975,41 +975,23 @@ class CardBrowserViewModel(
         )
     }
 
-    private val _availableColumns = MutableLiveData<List<ColumnWithSample>>()
-    val availableColumns: LiveData<List<ColumnWithSample>> = _availableColumns
+    private val _availableColumns = MutableStateFlow<List<ColumnWithSample>>(emptyList())
+
+    val availableColumns: StateFlow<List<ColumnWithSample>> = _availableColumns.asStateFlow()
 
     // Retrieves available columns
     fun fetchAvailableColumns(cardsOrNotes: CardsOrNotes) {
         viewModelScope.launch {
             val (_, available) = previewColumnHeadings(cardsOrNotes)
-
             if (available.isNotEmpty()) {
-                _availableColumns.postValue(available)
+                _availableColumns.value = available
                 for (column in available) {
                     Timber.e("Available column: ${column.label}")
                 }
             } else {
-                Timber.e(" No available columns found")
-                _availableColumns.postValue(emptyList())
+                Timber.e("No available columns found")
+                _availableColumns.value = emptyList()
             }
-        }
-    }
-
-    fun updateSelectedColumn(selectedColumn: ColumnWithSample?, newColumn: ColumnWithSample) {
-        viewModelScope.launch {
-            val previousCollection = flowOfActiveColumns.value.columns.toMutableList()
-            // Find the index of the column using ankiColumnKey
-            val indexToReplace = previousCollection.indexOfFirst {
-                it.ankiColumnKey == selectedColumn?.columnType?.ankiColumnKey
-            }
-            // if found replace it with the new column
-            if (indexToReplace != -1) {
-                previousCollection[indexToReplace] = newColumn.columnType
-            } else {
-                Timber.e("Selected column not found in active columns! (ankiColumnKey=${selectedColumn?.columnType?.ankiColumnKey})")
-            }
-            val newCollection = BrowserColumnCollection(previousCollection) // Keep all columns and replace only one
-            updateActiveColumns(newCollection)
         }
     }
 

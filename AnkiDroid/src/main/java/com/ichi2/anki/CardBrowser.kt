@@ -66,7 +66,6 @@ import com.ichi2.anki.browser.CardBrowserViewModel.SearchState
 import com.ichi2.anki.browser.CardBrowserViewModel.SearchState.Initializing
 import com.ichi2.anki.browser.CardBrowserViewModel.SearchState.Searching
 import com.ichi2.anki.browser.CardOrNoteId
-import com.ichi2.anki.browser.ColumnHeading
 import com.ichi2.anki.browser.ColumnSelectionDialogFragment
 import com.ichi2.anki.browser.ColumnWithSample
 import com.ichi2.anki.browser.PreviewerIdsFile
@@ -550,35 +549,54 @@ open class CardBrowser :
 
         // Opens the column selection dialog for the given selected column.
         fun showColumnSelectionDialog(selectedColumn: ColumnWithSample) {
-            Timber.d("Fetching available columns for: ${selectedColumn.label}")
+            Timber.d("Opening column selection dialog for: ${selectedColumn.label}")
 
             val dialog = ColumnSelectionDialogFragment.newInstance(selectedColumn)
 
             if (!supportFragmentManager.isStateSaved) {
                 dialog.show(supportFragmentManager, "ColumnSelectionDialog")
             } else {
-                supportFragmentManager.beginTransaction()
+                supportFragmentManager
+                    .beginTransaction()
                     .add(dialog, "ColumnSelectionDialog")
                     .commitAllowingStateLoss()
+                Timber.e("Using commitAllowingStateLoss() to show the dialog")
             }
         }
 
         fun onColumnNamesChanged(columnCollection: List<ColumnWithSample>) {
-            Timber.d("Column names changed")
-            browserColumnHeadings.removeAllViews()
+            Timber.d("Column names changed, updating UI")
+
+            if (columnCollection.isEmpty()) {
+                Timber.w("No columns available to display")
+                return
+            }
+
+            browserColumnHeadings.removeAllViews() // Reset UI
 
             val layoutInflater = LayoutInflater.from(browserColumnHeadings.context)
+
             for (column in columnCollection) {
-                Timber.d("Setting up column: %s", column.label)
-                val columnView = layoutInflater.inflate(R.layout.browser_column_heading, browserColumnHeadings, false) as TextView
+                Timber.d("Setting up column: ${column.label}")
+
+                val columnView =
+                    layoutInflater.inflate(
+                        R.layout.browser_column_heading,
+                        browserColumnHeadings,
+                        false,
+                    ) as TextView
+
                 columnView.text = column.label
 
                 // Single tap opens column selection dialog
-                columnView.setOnClickListener {
+                columnView.setOnClickListener { view ->
+                    view.isEnabled = false // Prevent multiple clicks
                     Timber.d("Clicked column: ${column.label}")
                     showColumnSelectionDialog(column)
+                    view.postDelayed({ view.isEnabled = true }, 500) // Enable after debounce delay
                 }
-                // Long press opens the BrowserColumnSelectionFragment for each specific TextView
+
+                // Long press opens the BrowserColumnSelectionFragment
                 columnView.setOnLongClickListener {
                     Timber.d("Long press on column: ${column.label} - opening column selection options")
                     val dialog = BrowserColumnSelectionFragment.createInstance(viewModel.cardsOrNotes)
