@@ -65,7 +65,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.combineTransform
 import kotlinx.coroutines.flow.filter
@@ -975,23 +974,19 @@ class CardBrowserViewModel(
         )
     }
 
-    private val _availableColumns = MutableStateFlow<List<ColumnWithSample>>(emptyList())
-
-    val availableColumns: StateFlow<List<ColumnWithSample>> = _availableColumns.asStateFlow()
-
     // Retrieves available columns
-    fun fetchAvailableColumns(cardsOrNotes: CardsOrNotes) {
-        viewModelScope.launch {
-            val (_, available) = previewColumnHeadings(cardsOrNotes)
-            if (available.isNotEmpty()) {
-                _availableColumns.value = available
-                for (column in available) {
-                    Timber.e("Available column: ${column.label}")
-                }
-            } else {
-                Timber.e("No available columns found")
-                _availableColumns.value = emptyList()
-            }
+    suspend fun fetchAvailableColumns(
+        cardsOrNotes: CardsOrNotes,
+        noColumnsAvailableString: String,
+    ): List<ColumnWithSample> {
+        val (_, available) = previewColumnHeadings(cardsOrNotes)
+
+        return if (available.isNotEmpty()) {
+            Timber.d("Available columns found: ${available.size}")
+            available
+        } else {
+            Timber.d("No available columns found")
+            listOf(ColumnWithSample(noColumnsAvailableString, CardBrowserColumn.QUESTION, null))
         }
     }
 

@@ -560,7 +560,7 @@ open class CardBrowser :
                     .beginTransaction()
                     .add(dialog, "ColumnSelectionDialog")
                     .commitAllowingStateLoss()
-                Timber.e("Using commitAllowingStateLoss() to show the dialog")
+                Timber.d("Using commitAllowingStateLoss() to show the dialog")
             }
         }
 
