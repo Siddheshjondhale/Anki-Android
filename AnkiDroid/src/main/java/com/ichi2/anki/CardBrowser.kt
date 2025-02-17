@@ -66,8 +66,8 @@ import com.ichi2.anki.browser.CardBrowserViewModel.SearchState
 import com.ichi2.anki.browser.CardBrowserViewModel.SearchState.Initializing
 import com.ichi2.anki.browser.CardBrowserViewModel.SearchState.Searching
 import com.ichi2.anki.browser.CardOrNoteId
+import com.ichi2.anki.browser.ColumnHeading
 import com.ichi2.anki.browser.ColumnSelectionDialogFragment
-import com.ichi2.anki.browser.ColumnWithSample
 import com.ichi2.anki.browser.PreviewerIdsFile
 import com.ichi2.anki.browser.RepositionCardsRequest.ContainsNonNewCardsError
 import com.ichi2.anki.browser.RepositionCardsRequest.RepositionData
@@ -548,7 +548,7 @@ open class CardBrowser :
         }
 
         // Opens the column selection dialog for the given selected column.
-        fun showColumnSelectionDialog(selectedColumn: ColumnWithSample) {
+        fun showColumnSelectionDialog(selectedColumn: ColumnHeading) {
             Timber.d("Opening column selection dialog for: ${selectedColumn.label}")
 
             val dialog = ColumnSelectionDialogFragment.newInstance(selectedColumn)
@@ -564,7 +564,7 @@ open class CardBrowser :
             }
         }
 
-        fun onColumnNamesChanged(columnCollection: List<ColumnWithSample>) {
+        fun onColumnNamesChanged(columnCollection: List<ColumnHeading>) {
             Timber.d("Column names changed, updating UI")
 
             if (columnCollection.isEmpty()) {

@@ -76,6 +76,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.parcelize.Parcelize
 import net.ankiweb.rsdroid.BackendException
 import org.jetbrains.annotations.VisibleForTesting
 import timber.log.Timber
@@ -246,17 +247,16 @@ class CardBrowserViewModel(
 
     val flowOfInitCompleted = MutableStateFlow(false)
 
-    val flowOfColumnHeadings: StateFlow<List<ColumnWithSample>> =
+    val flowOfColumnHeadings: StateFlow<List<ColumnHeading>> =
         combine(flowOfActiveColumns, flowOfCardsOrNotes, flowOfAllColumns) { activeColumns, cardsOrNotes, allColumns ->
             Timber.d("updated headings for %d columns", activeColumns.count)
-            activeColumns.columns.map { columnType ->
-                val columnData = allColumns[columnType.ankiColumnKey]!!
-                ColumnWithSample(
-                    label = columnData.getLabel(cardsOrNotes),
-                    columnType = columnType,
-                    sampleValue = null,
+            activeColumns.columns.map {
+                ColumnHeading(
+                    label = allColumns[it.ankiColumnKey]!!.getLabel(cardsOrNotes),
+                    ankiColumnKey = it.ankiColumnKey,
                 )
             }
+            // stateIn is required for tests
         }.stateIn(viewModelScope, SharingStarted.Eagerly, initialValue = emptyList())
 
     /**
@@ -1135,6 +1135,8 @@ sealed class RepositionCardsRequest {
 
 fun BrowserColumns.Column.getLabel(cardsOrNotes: CardsOrNotes): String = if (cardsOrNotes == CARDS) cardsModeLabel else notesModeLabel
 
+@Parcelize
 data class ColumnHeading(
     val label: String,
-)
+    val ankiColumnKey: String,
+) : Parcelable
